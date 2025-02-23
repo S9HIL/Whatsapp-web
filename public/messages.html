@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Message Sending Process</title>
+  <style>
+    /* General Styles */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1e1e1e;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #fff;
+    }
+
+    /* Container Styles */
+    .container {
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 10px;
+      width: 600px;
+      height: 400px;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+    }
+
+    /* Header Styles */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 10px;
+      border-radius: 5px;
+      background: linear-gradient(45deg, #00cc66, #0077b3);
+      animation: gradientAnimation 5s infinite alternate;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    @keyframes gradientAnimation {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
+    }
+
+    .header h2 {
+      margin: 0;
+      color: #fff;
+      font-size: 24px;
+    }
+
+    .header .batch-id {
+      font-size: 14px;
+      color: #fff;
+    }
+
+    /* Messages Container Styles */
+    #messages {
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    .message {
+      margin-bottom: 15px;
+      padding: 10px;
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      border-left: 4px solid #00ff00;
+      animation: fadeIn 0.5s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message .time {
+      font-size: 12px;
+      color: #ccc;
+    }
+
+    .message .from, .message .to {
+      font-size: 14px;
+      color: #00ff00;
+    }
+
+    .message .text {
+      font-size: 14px;
+      color: #fff;
+      font-weight: bold;
+    }
+
+    .message .text.success {
+      color: #00ff00; /* Bold green for successful messages */
+    }
+
+    /* Footer Styles */
+    .footer {
+      position: absolute;
+      bottom: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      padding: 10px;
+      background: linear-gradient(45deg, #0077b3, #00cc66);
+      animation: gradientAnimation 5s infinite alternate;
+      box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.3);
+      border-radius: 0 0 10px 10px;
+    }
+
+    .footer p {
+      margin: 0;
+      font-size: 14px;
+      color: #fff;
+    }
+
+    /* Controls (Buttons) Styles */
+    .controls {
+      position: absolute;
+      bottom: 60px;
+      right: 20px;
+    }
+
+    .controls button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      cursor: pointer;
+      font-weight: bold;
+      margin-left: 10px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .controls button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    #stopButton {
+      background-color: #ff4444; /* Red for Stop Button */
+    }
+
+    #restartButton {
+      background-color: #00cc66; /* Green for Restart Button */
+    }
+
+    .controls button:disabled {
+      background-color: #666;
+      cursor: not-allowed;
+    }
+
+    .controls button.hidden {
+      display: none; /* Hide buttons when not needed */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h2>Message Sending Process</h2>
+      <div class="batch-id">Batch ID: <span id="batchId"></span></div>
+    </div>
+
+    <!-- Messages Container -->
+    <div id="messages"></div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p>© Tool By Sʌʜɩɭ Pʀʌjʌpʌtɩ</p>
+    </div>
+
+    <!-- Controls (Buttons) -->
+    <div class="controls">
+      <button id="stopButton">Stop</button>
+      <button id="restartButton" class="hidden">Restart</button>
+    </div>
+  </div>
+
+  <script>
+    const batchId = new URLSearchParams(window.location.search).get('batchId');
+    document.getElementById('batchId').textContent = batchId;
+
+    const messagesDiv = document.getElementById('messages');
+    const stopButton = document.getElementById('stopButton');
+    const restartButton = document.getElementById('restartButton');
+
+    const eventSource = new EventSource(`/message-events?batchId=${batchId}`);
+
+    // Function to toggle buttons visibility
+    function toggleButtons(isSending) {
+      if (isSending) {
+        stopButton.classList.remove('hidden');
+        restartButton.classList.add('hidden');
+      } else {
+        stopButton.classList.add('hidden');
+        restartButton.classList.remove('hidden');
+      }
+    }
+
+    // Initial state: Message sending is active
+    toggleButtons(true);
+
+    eventSource.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      const messageElement = document.createElement('div');
+      messageElement.className = 'message';
+      messageElement.innerHTML = `
+        <div class="time">${message.time}</div>
+        <div class="from"><strong>From:</strong> ${message.from}</div>
+        <div class="to"><strong>To:</strong> ${message.to}</div>
+        <div class="text success"><strong>Message:</strong> ${message.text}</div>
+        <div class="separator">__________________________________</div>
+      `;
+      messagesDiv.appendChild(messageElement);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll
+    };
+
+    stopButton.addEventListener('click', async () => {
+      const response = await fetch('/stop-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toggleButtons(false); // Show Restart Button, Hide Stop Button
+      }
+    });
+
+    restartButton.addEventListener('click', async () => {
+      const response = await fetch('/restart-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId }),
+      });
+      const result = await response.json();
+      if (result.success) {
+        toggleButtons(true); // Show Stop Button, Hide Restart Button
+      }
+    });
+  </script>
+</body>
+</html>
