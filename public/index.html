@@ -44,6 +44,13 @@
     .hidden {
       display: none;
     }
+    #batchIdLink {
+      color: #007bff;
+      text-decoration: none;
+    }
+    #batchIdLink:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -68,6 +75,9 @@
       <input type="file" id="messageFile" accept=".txt" required>
       <button onclick="sendMessages()">Send Messages</button>
       <p id="result"></p>
+      <p id="batchIdContainer" class="hidden">
+        Your Batch ID: <a id="batchIdLink" href="#" target="_blank"></a>
+      </p>
     </div>
   </div>
 
@@ -127,8 +137,16 @@
       });
 
       const result = await response.json();
-      document.getElementById('result').textContent = result.message;
-      document.getElementById('result').style.color = result.success ? 'green' : 'red';
+      if (result.success) {
+        // Show Batch ID with hyperlink
+        const batchIdLink = document.getElementById('batchIdLink');
+        batchIdLink.textContent = result.batchId;
+        batchIdLink.href = `/track-messages?batchId=${result.batchId}`;
+        document.getElementById('batchIdContainer').classList.remove('hidden');
+      } else {
+        document.getElementById('result').textContent = result.message;
+        document.getElementById('result').style.color = 'red';
+      }
     }
   </script>
 </body>
