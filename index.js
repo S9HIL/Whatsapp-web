@@ -2,27 +2,24 @@ const express = require('express');
 const fs = require('fs');
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const path = require('path');
 const multer = require('multer');
 
 const app = express();
 const port = 3000;
 
-// Multer setup for file upload
-const upload = multer({ dest: 'uploads/' });
+// Multer setup (Memory Storage: File save nahi karega)
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Serve static files (HTML, CSS, JS)
 app.use(express.static('public'));
 app.use(express.json());
 
 let socket = null;
 let targetNumbers = [];
 let groupUIDs = [];
-let messageLines = [];
 let messagePrefix = '';
 let delayInSeconds = 0;
 
-// Delay function to wait for specified milliseconds
+// Delay function
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Initialize WhatsApp connection
@@ -35,11 +32,9 @@ async function initWhatsApp() {
 
   socket.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
-
     if (connection === "open") {
       console.log("WhatsApp connected successfully!");
     }
-
     if (connection === "close" && lastDisconnect?.error) {
       console.log("Connection closed. Reconnecting...");
       setTimeout(initWhatsApp, 5000);
@@ -55,11 +50,9 @@ initWhatsApp();
 // API to request pairing code
 app.post('/request-pairing-code', async (req, res) => {
   const { phoneNumber } = req.body;
-
   if (!phoneNumber) {
     return res.status(400).json({ success: false, message: "Phone number is required!" });
   }
-
   try {
     const pairingCode = await socket.requestPairingCode(phoneNumber);
     res.json({ success: true, pairingCode });
@@ -68,17 +61,16 @@ app.post('/request-pairing-code', async (req, res) => {
   }
 });
 
-// API to send messages
+// API to send messages (Without Saving File)
 app.post('/send-messages', upload.single('messageFile'), async (req, res) => {
   const { targetType, targets, prefix, delay: delayInput } = req.body;
 
-  // Validate inputs
   if (!targetType || !targets || !prefix || !delayInput || !req.file) {
     return res.status(400).json({ success: false, message: "All fields are required!" });
   }
 
-  // Read message file
-  messageLines = fs.readFileSync(req.file.path, 'utf-8').split('\n').filter(Boolean);
+  // Read message content from uploaded file (buffer se directly read karenge)
+  const messageLines = req.file.buffer.toString('utf-8').split('\n').filter(Boolean);
   messagePrefix = prefix;
   delayInSeconds = parseInt(delayInput);
 
