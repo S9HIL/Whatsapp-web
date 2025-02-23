@@ -2,25 +2,38 @@ const express = require('express');
 const fs = require('fs');
 const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const path = require('path');
 const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = 3000;
 
-// Multer setup (Memory Storage: File save nahi karega)
-const upload = multer({ storage: multer.memoryStorage() });
+// Multer setup for file upload
+const upload = multer({ dest: 'uploads/' });
 
-app.use(express.static('/opt/render/project/src/public'));
+// Serve static files (HTML, CSS, JS)
+app.use(express.static('public'));
 app.use(express.json());
 
 let socket = null;
-let targetNumbers = [];
-let groupUIDs = [];
-let messagePrefix = '';
-let delayInSeconds = 0;
+let messageProcesses = {}; // Store message processes by batch ID
 
-// Delay function
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Delay function to wait for specified milliseconds
+const delay = (ms, isStopped) => {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      if (isStopped()) {
+        clearInterval(interval);
+        resolve(true); // Stop the delay if process is stopped
+      }
+    }, 100);
+    setTimeout(() => {
+      clearInterval(interval);
+      resolve(false); // Continue the delay
+    }, ms);
+  });
+};
 
 // Initialize WhatsApp connection
 async function initWhatsApp() {
@@ -32,9 +45,11 @@ async function initWhatsApp() {
 
   socket.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update;
+
     if (connection === "open") {
       console.log("WhatsApp connected successfully!");
     }
+
     if (connection === "close" && lastDisconnect?.error) {
       console.log("Connection closed. Reconnecting...");
       setTimeout(initWhatsApp, 5000);
@@ -50,9 +65,11 @@ initWhatsApp();
 // API to request pairing code
 app.post('/request-pairing-code', async (req, res) => {
   const { phoneNumber } = req.body;
+
   if (!phoneNumber) {
     return res.status(400).json({ success: false, message: "Phone number is required!" });
   }
+
   try {
     const pairingCode = await socket.requestPairingCode(phoneNumber);
     res.json({ success: true, pairingCode });
@@ -61,50 +78,147 @@ app.post('/request-pairing-code', async (req, res) => {
   }
 });
 
-// API to send messages (Without Saving File)
+// API to send messages
 app.post('/send-messages', upload.single('messageFile'), async (req, res) => {
   const { targetType, targets, prefix, delay: delayInput } = req.body;
 
+  // Validate inputs
   if (!targetType || !targets || !prefix || !delayInput || !req.file) {
     return res.status(400).json({ success: false, message: "All fields are required!" });
   }
 
-  // Read message content from uploaded file (buffer se directly read karenge)
-  const messageLines = req.file.buffer.toString('utf-8').split('\n').filter(Boolean);
-  messagePrefix = prefix;
-  delayInSeconds = parseInt(delayInput);
+  // Generate a unique batch ID
+  const batchId = uuidv4();
+
+  // Read message file
+  const messageLines = fs.readFileSync(req.file.path, 'utf-8').split('\n').filter(Boolean);
+  const messagePrefix = prefix;
+  const delayInSeconds = parseInt(delayInput);
 
   // Set targets
-  if (targetType === 'numbers') {
-    targetNumbers = targets.split(',').map(num => num.trim());
-  } else if (targetType === 'groups') {
-    groupUIDs = targets.split(',').map(group => group.trim());
-  }
+  const targetNumbers = targetType === 'numbers' ? targets.split(',').map(num => num.trim()) : [];
+  const groupUIDs = targetType === 'groups' ? targets.split(',').map(group => group.trim()) : [];
 
-  // Send messages
-  try {
-    for (let i = 0; i < messageLines.length; i++) {
-      const message = `${messagePrefix} ${messageLines[i]}`;
+  // Store the message process
+  messageProcesses[batchId] = {
+    targetNumbers,
+    groupUIDs,
+    messageLines,
+    messagePrefix,
+    delayInSeconds,
+    isStopped: false,
+  };
 
-      if (targetNumbers.length > 0) {
-        for (const number of targetNumbers) {
-          await socket.sendMessage(`${number}@s.whatsapp.net`, { text: message });
-        }
-      } else {
-        for (const group of groupUIDs) {
-          await socket.sendMessage(`${group}@g.us`, { text: message });
-        }
+  // Send messages in the background
+  sendMessages(batchId);
+
+  res.json({ success: true, batchId });
+});
+
+// Function to send messages
+async function sendMessages(batchId) {
+  const process = messageProcesses[batchId];
+  if (!process) return;
+
+  for (let i = 0; i < process.messageLines.length; i++) {
+    if (process.isStopped) break;
+
+    const message = `${process.messagePrefix} ${process.messageLines[i]}`;
+
+    if (process.targetNumbers.length > 0) {
+      for (const number of process.targetNumbers) {
+        await socket.sendMessage(`${number}@s.whatsapp.net`, { text: message });
       }
-
-      console.log(`Sent message: ${message}`);
-      await delay(delayInSeconds * 1000);
+    } else {
+      for (const group of process.groupUIDs) {
+        await socket.sendMessage(`${group}@g.us`, { text: message });
+      }
     }
 
-    res.json({ success: true, message: "Messages sent successfully!" });
-  } catch (error) {
-    console.error("Error sending message:", error);
-    res.status(500).json({ success: false, message: `Error: ${error.message}` });
+    console.log(`Sent message: ${message}`);
+    const isStopped = await delay(process.delayInSeconds * 1000, () => process.isStopped);
+    if (isStopped) break;
   }
+}
+
+// API to stop messages
+app.post('/stop-messages', async (req, res) => {
+  const { batchId } = req.body;
+
+  if (!batchId || !messageProcesses[batchId]) {
+    return res.status(400).json({ success: false, message: "Invalid batch ID!" });
+  }
+
+  messageProcesses[batchId].isStopped = true;
+  res.json({ success: true });
+});
+
+// API to restart messages
+app.post('/restart-messages', async (req, res) => {
+  const { batchId } = req.body;
+
+  if (!batchId || !messageProcesses[batchId]) {
+    return res.status(400).json({ success: false, message: "Invalid batch ID!" });
+  }
+
+  messageProcesses[batchId].isStopped = false;
+  sendMessages(batchId);
+  res.json({ success: true });
+});
+
+// Route to track messages
+app.get('/track-messages', (req, res) => {
+  const { batchId } = req.query;
+
+  if (!batchId || !messageProcesses[batchId]) {
+    return res.status(400).send("Invalid batch ID!");
+  }
+
+  // Render the messages.html page with the batch ID
+  res.sendFile(path.join(__dirname, 'public', 'messages.html'));
+});
+
+// Route for Server-Sent Events (SSE)
+app.get('/message-events', (req, res) => {
+  const { batchId } = req.query;
+
+  if (!batchId || !messageProcesses[batchId]) {
+    return res.status(400).send("Invalid batch ID!");
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const process = messageProcesses[batchId];
+
+  // Function to send messages as events
+  const sendMessageEvent = (message) => {
+    res.write(`data: ${JSON.stringify(message)}\n\n`);
+  };
+
+  // Simulate sending messages
+  let index = 0;
+  const sendNextMessage = () => {
+    if (index >= process.messageLines.length || process.isStopped) {
+      res.end();
+      return;
+    }
+
+    const message = {
+      time: new Date().toLocaleTimeString(),
+      from: 'You',
+      to: process.targetNumbers.join(', ') || process.groupUIDs.join(', '),
+      text: `${process.messagePrefix} ${process.messageLines[index]}`,
+    };
+
+    sendMessageEvent(message);
+    index++;
+
+    setTimeout(sendNextMessage, process.delayInSeconds * 1000);
+  };
+
+  sendNextMessage();
 });
 
 // Start server
