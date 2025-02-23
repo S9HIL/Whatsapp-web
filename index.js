@@ -10,7 +10,11 @@ const port = 3000;
 // Multer setup (Memory Storage: File save nahi karega)
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use(express.static('public'));
+const path = require('path');
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 app.use(express.json());
 
 let socket = null;
