@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Message Sender</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      width: 300px;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 20px;
+    }
+    input, select, button, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background: #28a745;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #218838;
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- WhatsApp Login Section -->
+    <div id="loginSection">
+      <h1>WhatsApp Login</h1>
+      <input type="text" id="phoneNumber" placeholder="Enter your phone number" required>
+      <button onclick="requestPairingCode()">Get Pairing Code</button>
+    </div>
+
+    <!-- Message Sending Section (Hidden Initially) -->
+    <div id="messageSection" class="hidden">
+      <h1>Send Messages</h1>
+      <select id="targetType">
+        <option value="numbers">Target Numbers</option>
+        <option value="groups">Groups</option>
+      </select>
+      <input type="text" id="targets" placeholder="Enter targets (comma-separated)" required>
+      <input type="text" id="prefix" placeholder="Enter message prefix" required>
+      <input type="number" id="delay" placeholder="Enter delay (in seconds)" required>
+      <input type="file" id="messageFile" accept=".txt" required>
+      <button onclick="sendMessages()">Send Messages</button>
+      <p id="result"></p>
+    </div>
+  </div>
+
+  <script>
+    // Function to request pairing code
+    async function requestPairingCode() {
+      const phoneNumber = document.getElementById('phoneNumber').value;
+
+      if (!phoneNumber) {
+        alert("Please enter your phone number!");
+        return;
+      }
+
+      const response = await fetch('/request-pairing-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phoneNumber }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`Your Pairing Code Is: ${result.pairingCode}`);
+        // Show message sending section after successful login
+        document.getElementById('loginSection').classList.add('hidden');
+        document.getElementById('messageSection').classList.remove('hidden');
+      } else {
+        alert(`Error: ${result.message}`);
+      }
+    }
+
+    // Function to send messages
+    async function sendMessages() {
+      const targetType = document.getElementById('targetType').value;
+      const targets = document.getElementById('targets').value;
+      const prefix = document.getElementById('prefix').value;
+      const delay = document.getElementById('delay').value;
+      const fileInput = document.getElementById('messageFile');
+
+      if (!targets || !prefix || !delay || !fileInput.files[0]) {
+        alert("All fields are required!");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('targetType', targetType);
+      formData.append('targets', targets);
+      formData.append('prefix', prefix);
+      formData.append('delay', delay);
+      formData.append('messageFile', fileInput.files[0]);
+
+      const response = await fetch('/send-messages', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      document.getElementById('result').textContent = result.message;
+      document.getElementById('result').style.color = result.success ? 'green' : 'red';
+    }
+  </script>
+</body>
+</html>
