@@ -3,51 +3,146 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsApp Message Sender</title>
+  <title>WhatsApp Sender</title>
   <style>
+    /* General Reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: url('https://i.ibb.co/kVD8k0PD/pexels-kovyrina-937980.jpg') no-repeat center center/cover;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
-      margin: 0;
+      overflow: hidden;
     }
+
     .container {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      width: 300px;
+      background: rgba(255, 255, 255, 0.05); /* More transparent */
+      backdrop-filter: blur(20px); /* Increased blur for glass effect */
+      padding: 2.5rem;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
       text-align: center;
-    }
-    h1 {
-      margin-bottom: 20px;
-    }
-    input, select, button, textarea {
+      animation: fadeIn 1.5s ease-in-out;
+      max-width: 400px;
       width: 100%;
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-      border-radius: 4px;
     }
-    button {
-      background: #28a745;
+
+    h1 {
+      font-size: 2.5rem;
       color: white;
+      margin-bottom: 1.5rem;
+      animation: slideDown 1s ease-in-out;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .input-group {
+      position: relative;
+      margin-bottom: 2rem;
+      animation: slideUp 1s ease-in-out;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 1.1rem;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+      text-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 1rem;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      font-size: 1rem;
+      outline: none;
+      transition: all 0.3s ease;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+    }
+
+    .input-group input:focus {
+      border-color: white;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    }
+
+    .input-group input::placeholder {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .button {
+      background: white;
+      color: #128C7E;
+      padding: 1rem 2.5rem;
       border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
       cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
     }
-    button:hover {
-      background: #218838;
+
+    .button:hover {
+      background: #128C7E;
+      color: white;
+      transform: translateY(-3px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
     }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     .hidden {
       display: none;
     }
+
     #batchIdLink {
       color: #007bff;
       text-decoration: none;
     }
+
     #batchIdLink:hover {
       text-decoration: underline;
     }
@@ -58,22 +153,34 @@
     <!-- WhatsApp Login Section -->
     <div id="loginSection">
       <h1>WhatsApp Login</h1>
-      <input type="text" id="phoneNumber" placeholder="Enter your phone number" required>
-      <button onclick="requestPairingCode()">Get Pairing Code</button>
+      <div class="input-group">
+        <input type="text" id="phoneNumber" placeholder="Enter your phone number" required>
+      </div>
+      <button class="button" onclick="requestPairingCode()">Get Pairing Code</button>
     </div>
 
     <!-- Message Sending Section (Hidden Initially) -->
     <div id="messageSection" class="hidden">
       <h1>Send Messages</h1>
-      <select id="targetType">
-        <option value="numbers">Target Numbers</option>
-        <option value="groups">Groups</option>
-      </select>
-      <input type="text" id="targets" placeholder="Enter targets (comma-separated)" required>
-      <input type="text" id="prefix" placeholder="Enter message prefix" required>
-      <input type="number" id="delay" placeholder="Enter delay (in seconds)" required>
-      <input type="file" id="messageFile" accept=".txt" required>
-      <button onclick="sendMessages()">Send Messages</button>
+      <div class="input-group">
+        <select id="targetType">
+          <option value="numbers">Target Numbers</option>
+          <option value="groups">Groups</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <input type="text" id="targets" placeholder="Enter targets (comma-separated)" required>
+      </div>
+      <div class="input-group">
+        <input type="text" id="prefix" placeholder="Enter message prefix" required>
+      </div>
+      <div class="input-group">
+        <input type="number" id="delay" placeholder="Enter delay (in seconds)" required>
+      </div>
+      <div class="input-group">
+        <input type="file" id="messageFile" accept=".txt" required>
+      </div>
+      <button class="button" onclick="sendMessages()">Send Messages</button>
       <p id="result"></p>
       <p id="batchIdContainer" class="hidden">
         Your Batch ID: <a id="batchIdLink" href="#" target="_blank"></a>
