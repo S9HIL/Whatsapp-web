@@ -5,6 +5,7 @@ const pino = require('pino');
 const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 
 const app = express();
 const port = 3000;
