@@ -5,7 +5,6 @@ const pino = require('pino');
 const path = require('path');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
-const crypto = require('crypto');
 
 const app = express();
 const port = 3000;
@@ -48,11 +47,11 @@ async function initWhatsApp() {
     const { connection, lastDisconnect } = update;
 
     if (connection === "open") {
-      console.log("WhatsApp connected successfully!");
+      console.log("✅ WhatsApp connected successfully!");
     }
 
     if (connection === "close" && lastDisconnect?.error) {
-      console.log("Connection closed. Reconnecting...");
+      console.log("❌ Connection closed. Reconnecting...");
       setTimeout(initWhatsApp, 5000);
     }
   });
@@ -63,7 +62,9 @@ async function initWhatsApp() {
 // Start WhatsApp connection
 initWhatsApp();
 
-// API to request pairing code
+// ====================== APIs ======================
+
+// Request Pairing Code
 app.post('/request-pairing-code', async (req, res) => {
   const { phoneNumber } = req.body;
 
@@ -72,36 +73,30 @@ app.post('/request-pairing-code', async (req, res) => {
   }
 
   try {
-    // Baileys no longer supports requestPairingCode; return a placeholder
-    const pairingCode = 'N/A'; // <-- Fixed crypto error
+    const pairingCode = await socket.requestPairingCode(phoneNumber);
     res.json({ success: true, pairingCode });
   } catch (error) {
     res.status(500).json({ success: false, message: `Error: ${error.message}` });
   }
 });
 
-// API to send messages
+// Send Messages
 app.post('/send-messages', upload.single('messageFile'), async (req, res) => {
   const { targetType, targets, prefix, delay: delayInput } = req.body;
 
-  // Validate inputs
   if (!targetType || !targets || !prefix || !delayInput || !req.file) {
     return res.status(400).json({ success: false, message: "All fields are required!" });
   }
 
-  // Generate a unique batch ID
   const batchId = uuidv4();
 
-  // Read message file
   const messageLines = fs.readFileSync(req.file.path, 'utf-8').split('\n').filter(Boolean);
   const messagePrefix = prefix;
   const delayInSeconds = parseInt(delayInput);
 
-  // Set targets
   const targetNumbers = targetType === 'numbers' ? targets.split(',').map(num => num.trim()) : [];
   const groupUIDs = targetType === 'groups' ? targets.split(',').map(group => group.trim()) : [];
 
-  // Store the message process
   messageProcesses[batchId] = {
     targetNumbers,
     groupUIDs,
@@ -111,13 +106,12 @@ app.post('/send-messages', upload.single('messageFile'), async (req, res) => {
     isStopped: false,
   };
 
-  // Send messages in the background
   sendMessages(batchId);
 
   res.json({ success: true, batchId });
 });
 
-// Function to send messages
+// Send Messages Function
 async function sendMessages(batchId) {
   const process = messageProcesses[batchId];
   if (!process) return;
@@ -137,13 +131,13 @@ async function sendMessages(batchId) {
       }
     }
 
-    console.log(`Sent message: ${message}`);
+    console.log(`📩 Sent message: ${message}`);
     const isStopped = await delay(process.delayInSeconds * 1000, () => process.isStopped);
     if (isStopped) break;
   }
 }
 
-// API to stop messages
+// Stop Messages
 app.post('/stop-messages', async (req, res) => {
   const { batchId } = req.body;
 
@@ -155,7 +149,7 @@ app.post('/stop-messages', async (req, res) => {
   res.json({ success: true });
 });
 
-// API to restart messages
+// Restart Messages
 app.post('/restart-messages', async (req, res) => {
   const { batchId } = req.body;
 
@@ -168,7 +162,7 @@ app.post('/restart-messages', async (req, res) => {
   res.json({ success: true });
 });
 
-// Route to track messages
+// Track Messages
 app.get('/track-messages', (req, res) => {
   const { batchId } = req.query;
 
@@ -176,11 +170,10 @@ app.get('/track-messages', (req, res) => {
     return res.status(400).send("Invalid batch ID!");
   }
 
-  // Render the messages.html page with the batch ID
   res.sendFile(path.join(__dirname, 'public', 'messages.html'));
 });
 
-// Route for Server-Sent Events (SSE)
+// SSE for Live Message Tracking
 app.get('/message-events', (req, res) => {
   const { batchId } = req.query;
 
@@ -194,12 +187,10 @@ app.get('/message-events', (req, res) => {
 
   const process = messageProcesses[batchId];
 
-  // Function to send messages as events
   const sendMessageEvent = (message) => {
     res.write(`data: ${JSON.stringify(message)}\n\n`);
   };
 
-  // Simulate sending messages
   let index = 0;
   const sendNextMessage = () => {
     if (index >= process.messageLines.length || process.isStopped) {
@@ -223,7 +214,7 @@ app.get('/message-events', (req, res) => {
   sendNextMessage();
 });
 
-// Start server
+// Start Server
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`🚀 Server running at http://localhost:${port}`);
 });
